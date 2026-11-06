@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
-"""
-Project: Modular Python Script Template
-Description: Just plug in your def functions and run!
-"""
 
 import argparse
 import sys
 from typing import Optional
-
-# ==========================================
-# 🧩 1. PLUG IN YOUR FUNCTIONS HERE (def)
-# ==========================================
-
-
 import re
 import time
 import json
@@ -1683,22 +1673,3 @@ logger.info("=== Automated Process Finished Successfully ===")
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-"""
-Ami amar existing Python template-e boshanor jonno customized functions chai.
-
-Amar structure-er requirements:
-1. Amar requirement onujayi def function(s) generate kore dao.
-2. Template-er `main()` function-er bhitore kon kon function call korte hobe ebong ki ki arguments pass korte hobe, ta shoho full main() block-ta likhe dao.
-3. Code-e type hinting ebong simple docstring maintain koro.
-
---------------------------------------------------
-📌 AMAR REQUIREMENTS:
-[Mass Data Scraping (Enumeration):
-IDOR vulnerability thakle python script diye khub sohojei thousands of users-er data dump ba export koreneya 100% possible.]
---------------------------------------------------
-"""
